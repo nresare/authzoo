@@ -3,6 +3,7 @@ name = "authzoo"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+description = "Shared functionality for configuration of jwt authentication for Rust services"
 
 [dependencies]
 anyhow = "1.0"
