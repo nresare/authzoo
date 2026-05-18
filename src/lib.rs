@@ -290,20 +290,21 @@ impl TokenValidator {
         Ok(())
     }
 
-    pub fn validate(&self, role_name: &str, token: &str) -> Result<(), AuthzooError> {
-        self.validate_claims(role_name, token).map(|_| ())
-    }
-
-    pub fn validate_claims(
-        &self,
-        role_name: &str,
-        token: &str,
-    ) -> Result<ValidatedClaims, AuthzooError> {
-        let role = self
-            .roles
-            .get(role_name)
-            .ok_or_else(|| AuthzooError::UnknownRole(role_name.to_string()))?;
-        validate_token_for_role(role, token)
+    pub fn validate(&self, token: &str) -> Vec<String> {
+        self.roles
+            .iter()
+            .filter_map(|(name, role)| match validate_token_for_role(role, token) {
+                Ok(_) => Some(name.clone()),
+                Err(error) => {
+                    debug!(
+                        role = %name,
+                        error = %error,
+                        "token did not match role"
+                    );
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -701,34 +702,26 @@ sub = { any-of = ["builder", "release-bot"] }
     }
 
     #[test]
-    fn validates_role_when_signature_registered_claims_and_role_claims_match() {
+    fn matches_role_when_signature_registered_claims_and_role_claims_match() {
         let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
         let token = test_token("builder", "my-org", "release");
 
-        validator.validate("buildkite-release", &token).unwrap();
-
-        let claims = validator
-            .validate_claims("buildkite-release", &token)
-            .unwrap();
-        assert_eq!(claims.subject(), "builder");
-        assert_eq!(claims.claim_value("pipeline_slug"), Some("release"));
-    }
-
-    #[test]
-    fn rejects_role_when_claims_do_not_match() {
-        let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
-        let token = test_token("builder", "my-org", "other");
-
-        let error = validator.validate("buildkite-release", &token).unwrap_err();
-
         assert_eq!(
-            error.to_string(),
-            "claim 'pipeline_slug' must satisfy equals 'release'"
+            validator.validate(&token),
+            vec!["buildkite-release".to_string()]
         );
     }
 
     #[test]
-    fn validates_only_the_requested_role() {
+    fn omits_role_when_claims_do_not_match() {
+        let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
+        let token = test_token("builder", "my-org", "other");
+
+        assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn returns_only_roles_whose_claims_match() {
         let validator = TokenValidator::new(vec![
             RoleConfig {
                 name: "other".to_string(),
@@ -743,12 +736,9 @@ sub = { any-of = ["builder", "release-bot"] }
         .unwrap();
         let token = test_token("builder", "my-org", "release");
 
-        let error = validator.validate("other", &token).unwrap_err();
-        validator.validate("buildkite-release", &token).unwrap();
-
         assert_eq!(
-            error.to_string(),
-            "claim 'pipeline_slug' must satisfy equals 'other'"
+            validator.validate(&token),
+            vec!["buildkite-release".to_string()]
         );
     }
 
@@ -776,9 +766,8 @@ sub = { any-of = ["builder", "release-bot"] }
     #[test]
     fn reports_unknown_role_references() {
         let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
-        let token = test_token("builder", "my-org", "release");
 
-        let error = validator.validate("missing", &token).unwrap_err();
+        let error = validator.ensure_roles_exist(["missing"]).unwrap_err();
 
         assert_eq!(error.to_string(), "unknown role 'missing'");
     }
