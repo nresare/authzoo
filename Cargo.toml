@@ -1,6 +1,6 @@
 [package]
 name = "authzoo"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "Shared functionality for configuration of jwt authentication for Rust services"
