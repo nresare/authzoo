@@ -15,10 +15,9 @@ exchange mappings, or anything else with an authorization decision.
 - validating issuer, audience, signature, and expiry
 - resolving validation keys from a static key or OIDC/JWKS discovery
 - matching token claims against role requirements
-- optionally returning validated claims to the application
 
 Your application still owns its own permission model. `authzoo` answers the
-question: "Can this token assume this role?"
+question: "Which roles can this token assume?"
 
 ## Role Config
 
@@ -97,45 +96,36 @@ algorithms = ["HS256"]
 
 ## Application Use
 
-Applications usually decide which role is required before calling `authzoo`.
-That role might come from a route, an action config, a resource policy, or any
-other application-specific authorization decision.
+Each protected resource declares the roles that are allowed to access it.
 
 ```toml
 [[protected-action]]
 name = "publish-release"
-role = "release-pipeline"
+allowed-roles = ["release-pipeline", "release-admin"]
 ```
 
-At runtime, build a token validator from configuration and ask whether the
-caller's JWT can assume the required role.
+At runtime, build a token validator from configuration, ask which roles the
+caller's JWT can assume, and intersect that list with the resource's allowed
+roles.
 
 ```rust
 let validator = authzoo::TokenValidator::try_from(config.authzoo)?;
 
-validator.validate(&action.role, bearer_token)?;
+let assumed = validator.validate(bearer_token);
+let Some(role) = action
+    .allowed_roles
+    .iter()
+    .find(|allowed| assumed.iter().any(|r| r == *allowed))
+else {
+    return Err(Forbidden);
+};
 
-tracing::info!(
-    role = %action.role,
-    "request authorized"
-);
+tracing::info!(role = %role, "request authorized");
 ```
 
-If validation returns `Ok(())`, the application knows that the token can assume
-the specified role. If validation fails, `authzoo` returns an error explaining
-the failed token validation or claim requirement.
-
-If the application needs the token subject or custom claims after validation, it
-can call `validate_claims`.
-
-```rust
-let claims = validator.validate_claims(&action.role, bearer_token)?;
-tracing::info!(
-    role = %action.role,
-    subject = claims.subject(),
-    "request authorized"
-);
-```
+`validate` returns every configured role whose issuer, audience, signature,
+and claim requirements are satisfied by the token. If no role matches, the
+returned list is empty.
 
 ## Public Types
 
@@ -144,8 +134,7 @@ The main types are:
 - `Config`: a TOML-friendly wrapper containing `roles`
 - `RoleConfig`: issuer, audience, algorithms, validation key, and required claims
 - `ClaimRequirement`: exact string or one-of string matching
-- `TokenValidator`: validates tokens against a named role
-- `ValidatedClaims`: access to `sub` and flattened custom claims
+- `TokenValidator`: returns the roles a token can assume
 
 ## Boundaries
 
