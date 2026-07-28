@@ -6,7 +6,7 @@ use crate::{AuthzooError, Config, RoleConfig, ValidatedClaims};
 use anyhow::Context;
 use jsonwebtoken::{Validation, decode, decode_header};
 use std::collections::{BTreeMap, HashSet};
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct TokenValidator {
@@ -107,7 +107,15 @@ fn validate_token_for_role(
                 source,
             }
         })?;
-    decoded.claims.require_claims(&role.claims)?;
+    if let Err(error) = decoded.claims.require_claims(&role.claims) {
+        info!(
+            role = %role.name,
+            error = %error,
+            claims = ?decoded.claims,
+            "token signature and registered claims are valid, but role claims did not match"
+        );
+        return Err(error);
+    }
 
     debug!(
         role = %role.name,
@@ -153,6 +161,19 @@ mod tests {
         let token = test_token("builder", "my-org", "other");
 
         assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn reports_the_claim_that_did_not_match_after_token_validation() {
+        let role = buildkite_role();
+        let token = test_token("builder", "my-org", "other");
+
+        let error = validate_token_for_role(&role, &token).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "claim 'pipeline_slug' must satisfy equals 'release'"
+        );
     }
 
     #[test]
