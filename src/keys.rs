@@ -50,6 +50,7 @@ fn decoding_key_for_algorithm(
             .context("failed to parse EC validation key")?,
         Algorithm::EdDSA => DecodingKey::from_ed_pem(validation_key.as_bytes())
             .context("failed to parse EdDSA validation key")?,
+        _ => todo!("Unhandled algorithm {:?}", algorithm),
     };
     Ok(decoding_key)
 }

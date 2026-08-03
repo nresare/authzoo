@@ -7,7 +7,7 @@ description = "Shared functionality for configuration of jwt authentication for 
 
 [dependencies]
 anyhow = "1.0"
-jsonwebtoken = { version = "10.3", features = ["rust_crypto"] }
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

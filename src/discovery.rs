@@ -365,6 +365,7 @@ fn jwk_matches_algorithm(jwk: &Jwk, algorithm: Algorithm) -> bool {
             matches!(jwk.algorithm, AlgorithmParameters::EllipticCurve(_))
         }
         Algorithm::EdDSA => matches!(jwk.algorithm, AlgorithmParameters::OctetKeyPair(_)),
+        _ => todo!("Unhandled algorithm {:?}", algorithm),
     }
 }
 
@@ -389,6 +390,7 @@ fn key_algorithm_for_algorithm(algorithm: Algorithm) -> KeyAlgorithm {
         Algorithm::ES256 => KeyAlgorithm::ES256,
         Algorithm::ES384 => KeyAlgorithm::ES384,
         Algorithm::EdDSA => KeyAlgorithm::EdDSA,
+        _ => todo!("Unhandled algorithm {:?}", algorithm),
     }
 }
 
