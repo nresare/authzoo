@@ -53,7 +53,7 @@ impl TokenValidator {
             .filter_map(|(name, role)| match validate_token_for_role(role, token) {
                 Ok(_) => Some(name.clone()),
                 Err(error) => {
-                    debug!(
+                    info!(
                         role = %name,
                         error = %error,
                         "token did not match role"
@@ -108,7 +108,7 @@ fn validate_token_for_role(
             }
         })?;
     if let Err(error) = decoded.claims.require_claims(&role.claims) {
-        info!(
+        debug!(
             role = %role.name,
             error = %error,
             claims = ?decoded.claims,

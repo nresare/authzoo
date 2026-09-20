@@ -173,7 +173,7 @@ impl JwtAlgorithm {
 }
 
 fn default_algorithms() -> Vec<JwtAlgorithm> {
-    vec![JwtAlgorithm::Rs256]
+    vec![JwtAlgorithm::Rs256, JwtAlgorithm::Es256]
 }
 
 #[cfg(test)]
