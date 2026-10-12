@@ -59,6 +59,18 @@ Or as one-of matches:
 sub = { any-of = ["service-a", "service-b"] }
 ```
 
+Or, for a claim whose value is an array, as a membership match:
+
+```toml
+[role.claims]
+groups = { contains = "release-approvers" }
+```
+
+This matches a token whose `groups` claim is an array with an element exactly
+equal to `release-approvers`. An element that merely contains that text does not
+match, and a string-valued `groups` claim is not treated as a one-element array.
+The other forms only ever match a string-valued claim.
+
 ## Validation Keys
 
 If `validation-key` is omitted, `authzoo` discovers signing keys using OpenID

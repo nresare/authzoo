@@ -238,6 +238,123 @@ mod tests {
         }
     }
 
+    fn groups_role() -> RoleConfig {
+        RoleConfig {
+            name: "release-approvers".to_string(),
+            issuer: "https://issuer.example".to_string(),
+            audience: "artifact-service".to_string(),
+            validation_key: Some("shared-secret".to_string()),
+            algorithms: vec![JwtAlgorithm::Hs256],
+            claims: BTreeMap::from([(
+                "groups".to_string(),
+                ClaimRequirement::contains("release-approvers"),
+            )]),
+        }
+    }
+
+    fn groups_token(groups: serde_json::Value) -> String {
+        let exp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3600;
+        encode(
+            &Header::new(Algorithm::HS256),
+            &serde_json::json!({
+                "sub": "someone",
+                "iss": "https://issuer.example",
+                "aud": "artifact-service",
+                "exp": exp,
+                "groups": groups,
+            }),
+            &EncodingKey::from_secret(b"shared-secret"),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn contains_matches_an_array_holding_the_exact_value() {
+        let validator = TokenValidator::new(vec![groups_role()]).unwrap();
+        let token = groups_token(serde_json::json!(["readers", "release-approvers"]));
+
+        assert_eq!(
+            validator.validate(&token),
+            vec!["release-approvers".to_string()]
+        );
+    }
+
+    #[test]
+    fn contains_does_not_match_an_element_that_only_contains_the_value() {
+        let validator = TokenValidator::new(vec![groups_role()]).unwrap();
+        let token = groups_token(serde_json::json!(["release-approvers-readonly"]));
+
+        assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn contains_does_not_match_a_value_that_is_a_prefix_of_the_requirement() {
+        let validator = TokenValidator::new(vec![groups_role()]).unwrap();
+        let token = groups_token(serde_json::json!(["release"]));
+
+        assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn contains_does_not_treat_a_string_claim_as_a_one_element_array() {
+        let validator = TokenValidator::new(vec![groups_role()]).unwrap();
+        let token = groups_token(serde_json::json!("release-approvers"));
+
+        assert!(
+            validator.validate(&token).is_empty(),
+            "a string-valued claim must not satisfy a contains requirement"
+        );
+    }
+
+    #[test]
+    fn contains_does_not_match_when_the_claim_is_absent() {
+        let validator = TokenValidator::new(vec![groups_role()]).unwrap();
+        let token = groups_token(serde_json::Value::Null);
+
+        assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn contains_ignores_non_string_array_elements() {
+        let validator = TokenValidator::new(vec![groups_role()]).unwrap();
+        let token = groups_token(serde_json::json!([1, true, {"name": "release-approvers"}]));
+
+        assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn equals_still_does_not_match_an_array_claim() {
+        // Existing requirement forms keep their meaning: only a contains requirement looks inside
+        // an array.
+        let role = RoleConfig {
+            claims: BTreeMap::from([(
+                "groups".to_string(),
+                ClaimRequirement::equals("release-approvers"),
+            )]),
+            ..groups_role()
+        };
+        let validator = TokenValidator::new(vec![role]).unwrap();
+        let token = groups_token(serde_json::json!(["release-approvers"]));
+
+        assert!(validator.validate(&token).is_empty());
+    }
+
+    #[test]
+    fn reports_an_unmet_contains_requirement() {
+        let token = groups_token(serde_json::json!(["readers"]));
+
+        let error = validate_token_for_role(&groups_role(), &token).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "claim 'groups' must satisfy contains 'release-approvers'"
+        );
+    }
+
     fn test_token(subject: &str, organization_slug: &str, pipeline_slug: &str) -> String {
         let exp = SystemTime::now()
             .duration_since(UNIX_EPOCH)

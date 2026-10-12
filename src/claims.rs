@@ -35,8 +35,15 @@ impl ValidatedClaims {
     ) -> Option<(&'a str, &'a ClaimRequirement)> {
         required_claims
             .iter()
-            .find(|(claim_name, requirement)| !requirement.matches(self.claim_value(claim_name)))
+            .find(|(claim_name, requirement)| !self.satisfies(claim_name, requirement))
             .map(|(claim_name, requirement)| (claim_name.as_str(), requirement))
+    }
+
+    fn satisfies(&self, claim_name: &str, requirement: &ClaimRequirement) -> bool {
+        if claim_name == "sub" {
+            return requirement.matches(Some(&self.sub));
+        }
+        requirement.matches_value(self.claims.get(claim_name))
     }
 
     pub fn require_claims(
