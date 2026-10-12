@@ -9,6 +9,9 @@ mod keys;
 mod validator;
 
 pub use claims::ValidatedClaims;
-pub use config::{ClaimRequirement, Config, DetailedClaimRequirement, JwtAlgorithm, RoleConfig};
+pub use config::{
+    ClaimRequirement, Config, ContainsClaimRequirement, DetailedClaimRequirement, JwtAlgorithm,
+    RoleConfig,
+};
 pub use error::AuthzooError;
 pub use validator::TokenValidator;

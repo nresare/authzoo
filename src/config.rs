@@ -4,6 +4,7 @@
 use crate::AuthzooError;
 use jsonwebtoken::Algorithm;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -60,12 +61,25 @@ pub enum ClaimRequirement {
     Equals(String),
     AnyOf(Vec<String>),
     Detailed(DetailedClaimRequirement),
+    Contains(ContainsClaimRequirement),
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct DetailedClaimRequirement {
     pub any_of: Vec<String>,
+}
+
+/// Requires the claim to be a JSON array with an element exactly equal to `contains`.
+///
+/// Some issuers put group or role membership in an array claim, such as `roles` or `groups`.
+/// Every other requirement form compares a string-valued claim, so it can never match one of
+/// these. Matching is exact: an element that merely contains the required value does not match,
+/// and a string-valued claim is not treated as a single-element array.
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct ContainsClaimRequirement {
+    pub contains: String,
 }
 
 impl RoleConfig {
@@ -112,6 +126,13 @@ impl ClaimRequirement {
         Self::AnyOf(values.into_iter().map(Into::into).collect())
     }
 
+    /// Requires the claim to be an array with an element exactly equal to `value`.
+    pub fn contains(value: impl Into<String>) -> Self {
+        Self::Contains(ContainsClaimRequirement {
+            contains: value.into(),
+        })
+    }
+
     pub fn validate(&self, role: &str, claim: &str) -> Result<(), AuthzooError> {
         let is_empty = match self {
             Self::Equals(value) => value.is_empty(),
@@ -119,6 +140,7 @@ impl ClaimRequirement {
             Self::Detailed(DetailedClaimRequirement { any_of }) => {
                 any_of.is_empty() || any_of.iter().any(String::is_empty)
             }
+            Self::Contains(ContainsClaimRequirement { contains }) => contains.is_empty(),
         };
         if is_empty {
             return Err(AuthzooError::EmptyClaimRequirement {
@@ -129,6 +151,8 @@ impl ClaimRequirement {
         Ok(())
     }
 
+    /// Matches a string-valued claim. A `contains` requirement never matches here, because a
+    /// string is not an array; use [`Self::matches_value`] to match array-valued claims.
     pub fn matches(&self, value: Option<&str>) -> bool {
         match self {
             Self::Equals(required) => value == Some(required.as_str()),
@@ -137,6 +161,23 @@ impl ClaimRequirement {
                 .any_of
                 .iter()
                 .any(|required| value == Some(required.as_str())),
+            Self::Contains(_) => false,
+        }
+    }
+
+    /// Matches a claim of any JSON type. String requirements behave exactly as
+    /// [`Self::matches`]; a `contains` requirement matches an array holding an element exactly
+    /// equal to the required value.
+    pub fn matches_value(&self, value: Option<&Value>) -> bool {
+        match self {
+            Self::Contains(ContainsClaimRequirement { contains }) => {
+                value.and_then(Value::as_array).is_some_and(|elements| {
+                    elements
+                        .iter()
+                        .any(|element| element.as_str() == Some(contains.as_str()))
+                })
+            }
+            other => other.matches(value.and_then(Value::as_str)),
         }
     }
 }
@@ -148,6 +189,9 @@ impl std::fmt::Display for ClaimRequirement {
             Self::AnyOf(values) => write!(formatter, "one of {:?}", values),
             Self::Detailed(DetailedClaimRequirement { any_of }) => {
                 write!(formatter, "one of {any_of:?}")
+            }
+            Self::Contains(ContainsClaimRequirement { contains }) => {
+                write!(formatter, "contains '{contains}'")
             }
         }
     }
@@ -232,6 +276,70 @@ sub = { any-of = ["builder", "release-bot"] }
             error.to_string(),
             "role 'buildkite-release' claim 'sub' must define at least one acceptable value"
         );
+    }
+
+    #[test]
+    fn parses_contains_claim_requirement_from_toml() {
+        let config: TestConfig = toml::from_str(
+            r#"
+[[role]]
+name = "release-approvers"
+issuer = "https://issuer.example"
+audience = "artifact-service"
+
+[role.claims]
+groups = { contains = "release-approvers" }
+sub = { any-of = ["builder", "release-bot"] }
+"#,
+        )
+        .unwrap();
+
+        let claims = &config.roles[0].claims;
+        assert_eq!(
+            claims["groups"],
+            ClaimRequirement::contains("release-approvers")
+        );
+        assert!(
+            matches!(claims["sub"], ClaimRequirement::Detailed(_)),
+            "adding contains must not change how any-of parses"
+        );
+    }
+
+    #[test]
+    fn rejects_an_unknown_requirement_key() {
+        let result: Result<TestConfig, _> = toml::from_str(
+            r#"
+[[role]]
+name = "release-approvers"
+issuer = "https://issuer.example"
+audience = "artifact-service"
+
+[role.claims]
+groups = { includes = "release-approvers" }
+"#,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_an_empty_contains_requirement() {
+        let error = buildkite_role_with_claims(BTreeMap::from([(
+            "groups".to_string(),
+            ClaimRequirement::contains(""),
+        )]))
+        .validate()
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "role 'buildkite-release' claim 'groups' must define at least one acceptable value"
+        );
+    }
+
+    #[test]
+    fn string_matching_never_satisfies_contains() {
+        assert!(!ClaimRequirement::contains("x").matches(Some("x")));
     }
 
     fn buildkite_role_with_claims(claims: BTreeMap<String, ClaimRequirement>) -> RoleConfig {
