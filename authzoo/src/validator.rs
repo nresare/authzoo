@@ -47,6 +47,19 @@ impl TokenValidator {
         Ok(())
     }
 
+    /// Validate a token against one role, preserving the reason for rejection.
+    pub fn validate_for_role(
+        &self,
+        role_name: &str,
+        token: &str,
+    ) -> Result<ValidatedClaims, AuthzooError> {
+        let role = self
+            .roles
+            .get(role_name)
+            .ok_or_else(|| AuthzooError::UnknownRole(role_name.to_string()))?;
+        validate_token_for_role(role, token)
+    }
+
     pub fn validate(&self, token: &str) -> Vec<String> {
         self.roles
             .iter()
@@ -111,7 +124,6 @@ fn validate_token_for_role(
         debug!(
             role = %role.name,
             error = %error,
-            claims = ?decoded.claims,
             "token signature and registered claims are valid, but role claims did not match"
         );
         return Err(error);
@@ -156,6 +168,96 @@ mod tests {
     }
 
     #[test]
+    fn validates_one_role_and_returns_its_claims() {
+        let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
+        let token = test_token("builder", "my-org", "release");
+        let claims = validator
+            .validate_for_role("buildkite-release", &token)
+            .unwrap();
+        assert_eq!(claims.subject(), "builder");
+    }
+
+    #[test]
+    fn reports_unknown_role_when_validating_token() {
+        let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
+        assert!(matches!(
+            validator.validate_for_role("missing", "not-a-token"),
+            Err(AuthzooError::UnknownRole(role)) if role == "missing"
+        ));
+    }
+
+    #[test]
+    fn preserves_token_validation_failures() {
+        use jsonwebtoken::errors::ErrorKind;
+        let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
+        let token = test_token("builder", "my-org", "release");
+        let claims = jsonwebtoken::dangerous::insecure_decode::<serde_json::Value>(&token)
+            .unwrap()
+            .claims;
+        for (claim, value, expected) in [
+            ("exp", serde_json::json!(1), ErrorKind::ExpiredSignature),
+            (
+                "iss",
+                serde_json::json!("wrong-issuer"),
+                ErrorKind::InvalidIssuer,
+            ),
+            (
+                "aud",
+                serde_json::json!("wrong-audience"),
+                ErrorKind::InvalidAudience,
+            ),
+        ] {
+            let mut claims = claims.clone();
+            claims[claim] = value;
+            let token = encode(
+                &Header::new(Algorithm::HS256),
+                &claims,
+                &EncodingKey::from_secret(b"shared-secret"),
+            )
+            .unwrap();
+            let error = validator
+                .validate_for_role("buildkite-release", &token)
+                .unwrap_err();
+            assert!(
+                matches!(error, AuthzooError::TokenValidation { source, .. }
+                if source.kind() == &expected),
+                "unexpected error for {claim}"
+            );
+        }
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"wrong-secret"),
+        )
+        .unwrap();
+        assert!(
+            matches!(validator.validate_for_role("buildkite-release", &token),
+            Err(AuthzooError::TokenValidation { source, .. })
+                if source.kind() == &ErrorKind::InvalidSignature)
+        );
+        assert!(
+            validator
+                .validate_for_role("buildkite-release", "not-a-token")
+                .unwrap_err()
+                .to_string()
+                .contains("failed to decode token header")
+        );
+        let token = encode(
+            &Header::new(Algorithm::HS384),
+            &claims,
+            &EncodingKey::from_secret(b"shared-secret"),
+        )
+        .unwrap();
+        assert!(matches!(
+            validator.validate_for_role("buildkite-release", &token),
+            Err(AuthzooError::AlgorithmNotAllowed {
+                algorithm: Algorithm::HS384,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn omits_role_when_claims_do_not_match() {
         let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
         let token = test_token("builder", "my-org", "other");
@@ -165,10 +267,12 @@ mod tests {
 
     #[test]
     fn reports_the_claim_that_did_not_match_after_token_validation() {
-        let role = buildkite_role();
+        let validator = TokenValidator::new(vec![buildkite_role()]).unwrap();
         let token = test_token("builder", "my-org", "other");
 
-        let error = validate_token_for_role(&role, &token).unwrap_err();
+        let error = validator
+            .validate_for_role("buildkite-release", &token)
+            .unwrap_err();
 
         assert_eq!(
             error.to_string(),
