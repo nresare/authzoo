@@ -1,0 +1,19 @@
+[package]
+name = "authzoo"
+version = "0.1.6"
+edition.workspace = true
+license = "MIT"
+repository.workspace = true
+description = "Shared functionality for configuration of jwt authentication for Rust services"
+
+[dependencies]
+anyhow = "1.0"
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+
+[dev-dependencies]
+toml = "1.1"
