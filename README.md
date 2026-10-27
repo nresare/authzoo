@@ -1,8 +1,9 @@
 # authzoo
 
-Rust crates for authentication and authorization services. Each crate is
-independent and versioned separately; they share this repository because they
-serve the same family of applications.
+Rust crates for authentication and authorisation services such as [idelephant](https://github.com/nresare/idelephant), 
+[idcat](https://github.com/portswigger/idcat) and
+[reposnake](https://github.com/nresare/reposnake). Each crate is independent and versioned separately; they share
+this repository because they serve the same family of applications.
 
 | Crate | Purpose |
 |---|---|
@@ -24,6 +25,5 @@ own, for example `cargo test -p authzoo-server`.
 
 ## License
 
-`authzoo` is licensed under the MIT license. `authzoo-oauth` and
-`authzoo-server` are licensed under either the MIT or Apache-2.0 license, at
-your option. See each crate's directory for details.
+All crates in this repository are licensed under the MIT license. See the
+`LICENSE` file in each crate's directory for details.

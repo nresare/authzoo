@@ -1,13 +1,13 @@
 # authzoo
 
-`authzoo` is a Rust library for authorizing JWT-bearing callers through
+`authzoo` is a Rust library for authorising JWT-bearing callers through
 configurable roles.
 
 The central idea is similar to AWS IAM roles: a caller presents a JWT, and if
 that token satisfies the trust criteria for a role, the caller is considered to
 have assumed that role. Your application can then attach those roles to whatever
 it protects: upload permissions, internal API routes, deployment actions, token
-exchange mappings, or anything else with an authorization decision.
+exchange mappings, or anything else with an authorisation decision.
 
 `authzoo` handles the reusable JWT parts:
 
