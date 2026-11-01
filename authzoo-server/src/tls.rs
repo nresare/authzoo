@@ -30,9 +30,8 @@ pub async fn load(certificate: &Path, private_key: &Path) -> anyhow::Result<Rust
             .context("Could not parse TLS certificate chain")?;
         let key = PrivateKeyDer::from_pem_file(&key_path)
             .with_context(|| format!("Could not read TLS private key {}", key_path.display()))?;
-        // Select the provider explicitly: other dependencies also enable aws-lc-rs.
         let mut server_config = rustls::ServerConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
+            rustls_graviola::default_provider(),
         ))
         .with_safe_default_protocol_versions()?
         .with_no_client_auth()

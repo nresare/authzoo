@@ -100,6 +100,7 @@ dependencies = [
  "opentelemetry_sdk",
  "reqwest",
  "rustls",
+ "rustls-graviola",
  "serde",
  "tokio",
  "tokio-stream",
@@ -895,6 +896,16 @@ dependencies = [
  "r-efi 6.0.0",
  "rand_core 0.10.1",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "graviola"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ceed5ad5e9637af6fbc9de8734d9c6014ceacf3d8c5736e8eafa72d839fa0ac"
+dependencies = [
+ "cfg-if",
+ "getrandom 0.4.3",
 ]
 
 [[package]]
@@ -2122,11 +2133,20 @@ dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
- "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rustls-graviola"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf5d0a370be690f7f1aa4e1b912fde3f5f9a5c53285062fd2d6ac1a52ab3e883"
+dependencies = [
+ "graviola",
+ "rustls",
 ]
 
 [[package]]
