@@ -19,13 +19,14 @@ telemetry = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-ot
 anyhow = "1.0"
 axum = "0.8"
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-graviola = "0.4"
 tokio = { version = "1.51", features = ["rt", "signal", "time"] }
 tracing = "0.1"
 
 opentelemetry = { version = "0.33", default-features = false, features = ["trace"], optional = true }
 opentelemetry_sdk = { version = "0.33", default-features = false, features = ["trace"], optional = true }
-opentelemetry-otlp = { version = "0.33", default-features = false, features = ["trace", "grpc-tonic", "tls-ring", "tls-webpki-roots"], optional = true }
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["trace", "grpc-tonic", "tls-provider-agnostic", "tls-webpki-roots"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 url = { version = "2.5", optional = true }
 
@@ -36,4 +37,4 @@ tonic = { version = "0.14", features = ["transport"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1.51", features = ["macros", "rt-multi-thread", "net", "sync"] }
-reqwest = { version = "0.13", features = ["rustls", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2"] }

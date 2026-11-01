@@ -67,7 +67,7 @@ async fn https_negotiates_http2_and_supports_http1() {
         .unwrap();
     for http2 in [true, false] {
         let mut client_tls = rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
+            rustls_graviola::default_provider(),
         ))
         .with_safe_default_protocol_versions()
         .unwrap()
@@ -79,7 +79,7 @@ async fn https_negotiates_http2_and_supports_http1() {
             vec![b"http/1.1".to_vec()]
         };
         let client = reqwest::Client::builder()
-            .use_preconfigured_tls(client_tls)
+            .tls_backend_preconfigured(client_tls)
             .no_proxy()
             .timeout(std::time::Duration::from_secs(5));
         let client = if http2 {

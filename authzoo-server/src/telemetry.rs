@@ -64,6 +64,9 @@ impl TracesConfig {
 }
 
 pub fn provider(config: &TracesConfig) -> anyhow::Result<SdkTracerProvider> {
+    // Tonic uses the process-wide provider. Default to Graviola while respecting
+    // a provider the application has already installed.
+    let _ = rustls_graviola::default_provider().install_default();
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .with_endpoint(&config.endpoint)

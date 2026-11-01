@@ -70,6 +70,8 @@ mod tests {
     use tokio::sync::{Notify, oneshot};
 
     async fn exercise_shutdown(tls: bool, finish_request: bool) {
+        // Reqwest's provider-free backend uses the process-wide provider.
+        let _ = rustls_graviola::default_provider().install_default();
         let entered = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
         let app = Router::new().route(
